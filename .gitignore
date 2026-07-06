@@ -48,3 +48,7 @@ temp/
 
 # Cached cookies
 .cached_cookies_*.json
+
+test_endpoints.py
+server.pid
+output/

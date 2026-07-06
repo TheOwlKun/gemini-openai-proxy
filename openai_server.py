@@ -1364,7 +1364,7 @@ async def image_generations(request: ImageRequest, fast_request: Request):
             try:
                 async with httpx.AsyncClient(
                     follow_redirects=True,
-                    cookies=gemini_client.cookies,
+                    cookies=gemini_client.cookies.get_dict(),
                     proxy=gemini_client.proxy,
                 ) as client:
                     img_url = img.url

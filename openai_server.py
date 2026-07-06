@@ -942,7 +942,7 @@ async def proxy_image(
     try:
         async with httpx.AsyncClient(
             follow_redirects=True,
-            cookies=gemini_client.cookies,
+            cookies=gemini_client.cookies.get_dict(),
             proxy=gemini_client.proxy,
         ) as client:
             # Handle Google image URL size parameters

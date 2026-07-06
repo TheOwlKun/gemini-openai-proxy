@@ -290,74 +290,21 @@ class ImageProcessor:
     @staticmethod
     def remove_watermark(image_bytes: bytes) -> bytes:
         """
-        Remove the Gemini watermark using fixed-position reverse alpha blending.
-
-        Uses pre-computed alpha maps (assets/bg_48.png, bg_96.png) to identify
-        the watermark position and mathematically reverse the blend operation.
+        Safely remove the Gemini watermark by cropping the bottom edge.
+        This avoids the glitchy artifacts of alpha blending when Google changes the watermark position.
         """
         img = PILImage.open(BytesIO(image_bytes))
-
-        if img.mode == "RGBA":
-            alpha_channel = img.split()[3]
-            img = img.convert("RGB")
-            has_alpha = True
-        else:
-            img = img.convert("RGB")
-            has_alpha = False
-            alpha_channel = None
-
         width, height = img.size
 
-        # Select watermark size: both dimensions must exceed 1024 for large watermark
-        if width > 1024 and height > 1024:
-            wm_size, margin = 96, 64
-            alpha_map_path = "assets/bg_96.png"
-        else:
-            wm_size, margin = 48, 32
-            alpha_map_path = "assets/bg_48.png"
+        # Determine safe crop amount based on image size
+        crop_amount = 80 if height <= 1024 else 120
 
-        # Fixed bottom-right position
-        wm_x = width - margin - wm_size
-        wm_y = height - margin - wm_size
-
-        # Boundary check — return original if image is too small
-        if wm_x < 0 or wm_y < 0 or wm_x + wm_size > width or wm_y + wm_size > height:
-            logger.warning(f"Image too small for watermark removal: {width}x{height}")
-            return _save_image(img, has_alpha, alpha_channel)
-
-        # Load alpha map
-        try:
-            alpha_img = PILImage.open(alpha_map_path).convert("RGB")
-            alpha_arr = np.array(alpha_img, dtype=np.float32)
-            alpha_map = np.max(alpha_arr, axis=2) / 255.0
-        except Exception as e:
-            logger.warning(f"Failed to load alpha map: {e}")
-            return _save_image(img, has_alpha, alpha_channel)
-
-        img_array = np.array(img, dtype=np.float32)
-        logger.info(f"Watermark at ({wm_x},{wm_y}) size {wm_size}x{wm_size}")
-
-        # Apply reverse alpha blending
-        wm_region = img_array[wm_y : wm_y + wm_size, wm_x : wm_x + wm_size].copy()
-
-        for row in range(wm_size):
-            for col in range(wm_size):
-                alpha = alpha_map[row, col]
-                if alpha > ImageProcessor.ALPHA_THRESHOLD:
-                    alpha = min(alpha, 0.99)  # Prevent division by zero
-                    for c in range(3):
-                        watermarked = wm_region[row, col, c]
-                        original = (watermarked - alpha * 255.0) / (1.0 - alpha)
-                        wm_region[row, col, c] = np.clip(original, 0, 255)
-
-        img_array[wm_y : wm_y + wm_size, wm_x : wm_x + wm_size] = wm_region
-        result_img = PILImage.fromarray(img_array.astype(np.uint8), "RGB")
-
-        if has_alpha and alpha_channel is not None:
-            result_img.putalpha(alpha_channel)
+        # Boundary check - only crop if image is large enough
+        if height > crop_amount * 2:
+            img = img.crop((0, 0, width, height - crop_amount))
 
         output = BytesIO()
-        result_img.save(output, format="PNG")
+        img.save(output, format=img.format or "PNG")
         return output.getvalue()
 
     @staticmethod
@@ -1398,6 +1345,8 @@ async def image_generations(request: ImageRequest, fast_request: Request):
 
     try:
         gen_prompt = f"Generate an image: {request.prompt}"
+        if request.size and request.size != "1024x1024":
+            gen_prompt += f" in exactly {request.size} size/aspect ratio."
         response = await gemini_client.generate_content(
             gen_prompt, model=Model.BASIC_FLASH
         )

@@ -169,7 +169,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-secret-key", # Set in your .env as GEMINI_API_KEY
-    base_url="http://localhost:3897/v1"
+    base_url="http://localhost:3000/v1"
 )
 
 # 1. Chat Completion
@@ -193,7 +193,7 @@ print(image.data[0].url)
 ## cURL
 
 ```bash
-curl http://localhost:3897/v1/chat/completions \
+curl http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk-your-secret-key" \
   -d '{
